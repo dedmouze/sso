@@ -24,7 +24,7 @@ func main() {
 	log.Info("starting SSO", slog.String("env", cfg.Env), slog.String("version", "1"))
 	log.Debug("debug messages are enabled")
 
-	application := app.New(log, cfg.GRPS.Port, cfg.StoragePath, cfg.TokenTTL)
+	application := app.New(log, cfg.GRPC.Port, cfg.StoragePath, cfg.TokenTTL)
 	go application.GRPCServer.MustRun()
 
 	stop := make(chan os.Signal, 1)

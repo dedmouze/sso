@@ -13,12 +13,12 @@ type Config struct {
 	Env         string        `yaml:"env" env-default:"local"`
 	StoragePath string        `yaml:"storage_path" env-required:"true"`
 	TokenTTL    time.Duration `yaml:"token_ttl" env-required:"true"`
-	GRPS        gRPCConfig    `yaml:"grpc"`
+	GRPC        gRPCConfig    `yaml:"grpc"`
 }
 
 type gRPCConfig struct {
 	Port    int           `yaml:"port"`
-	Timeout time.Duration `yaml:"Timeout"`
+	Timeout time.Duration `yaml:"timeout"`
 }
 
 func MustLoad() *Config {
@@ -27,6 +27,10 @@ func MustLoad() *Config {
 		log.Fatal("Config path is empty")
 	}
 
+	return MustLoadPath(configPath)
+}
+
+func MustLoadPath(configPath string) *Config {
 	if _, err := os.Stat(configPath); os.IsNotExist(err) {
 		log.Fatalf("Config file %s does not exist", configPath)
 	}
