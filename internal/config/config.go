@@ -14,11 +14,16 @@ type Config struct {
 	StoragePath string        `yaml:"storage_path" env-required:"true"`
 	TokenTTL    time.Duration `yaml:"token_ttl" env-required:"true"`
 	GRPC        gRPCConfig    `yaml:"grpc"`
+	HTTP        HTTPServer    `yaml:"http"`
 }
 
 type gRPCConfig struct {
 	Port    int           `yaml:"port"`
 	Timeout time.Duration `yaml:"timeout"`
+}
+
+type HTTPServer struct {
+	Port int `yaml:"port"`
 }
 
 func MustLoad() *Config {

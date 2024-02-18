@@ -1,13 +1,16 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"flag"
 	"fmt"
+	"sso/internal/storage/sqlite"
 
 	"github.com/golang-migrate/migrate/v4"
 	_ "github.com/golang-migrate/migrate/v4/database/sqlite3"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
+	"golang.org/x/crypto/bcrypt"
 )
 
 func main() {
@@ -35,6 +38,18 @@ func main() {
 		}
 		panic(err)
 	}
+
+	storage, err := sqlite.New(storagePath)
+	if err != nil {
+		panic(err)
+	}
+
+	passHash, err := bcrypt.GenerateFromPassword([]byte("adminadmin"), bcrypt.DefaultCost)
+	if err != nil {
+		panic(err)
+	}
+
+	storage.SaveUser(context.Background(), "admin", passHash)
 
 	fmt.Println("migrations applied successfully")
 }

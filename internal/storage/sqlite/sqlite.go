@@ -79,26 +79,26 @@ func (s *Storage) User(ctx context.Context, email string) (models.User, error) {
 }
 
 // IsAdmin returns information whether the user is an admin
-func (s *Storage) IsAdmin(ctx context.Context, userID int64) (bool, error) {
-	const op = "storage.sqlite.IsAdmin"
+func (s *Storage) Admin(ctx context.Context, email string) (models.Admin, error) {
+	const op = "storage.sqlite.Admin"
 
-	stmt, err := s.db.Prepare("SELECT is_admin FROM users WHERE id = ?")
+	stmt, err := s.db.Prepare("SELECT id, email, level FROM admins WHERE email = ?")
 	if err != nil {
-		return false, fmt.Errorf("%s: %w", op, err)
+		return models.Admin{}, fmt.Errorf("%s: %w", op, err)
 	}
 
-	row := stmt.QueryRowContext(ctx, userID)
+	row := stmt.QueryRowContext(ctx, email)
 
-	var isAdmin bool
-	err = row.Scan(&isAdmin)
+	var admin models.Admin
+	err = row.Scan(&admin.ID, &admin.Email, &admin.Level)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return false, fmt.Errorf("%s: %w", op, storage.ErrUserNotFound)
+			return models.Admin{}, fmt.Errorf("%s: %w", op, storage.ErrAdminNotFound)
 		}
-		return false, fmt.Errorf("%s: %w", op, err)
+		return models.Admin{}, fmt.Errorf("%s: %w", op, err)
 	}
 
-	return isAdmin, nil
+	return admin, nil
 }
 
 // App returns app model from db by appID
@@ -122,4 +122,45 @@ func (s *Storage) App(ctx context.Context, appID int) (models.App, error) {
 	}
 
 	return app, nil
+}
+
+// AddModerator adds new moderator to admins db
+func (s *Storage) AddAdmin(ctx context.Context, email string) error {
+	const op = "storage.sqlite.AddAdmin"
+
+	stmt, err := s.db.Prepare("INSERT INTO admins(email, level) VALUES(?, ?)")
+	if err != nil {
+		return fmt.Errorf("%s: %w", op, err)
+	}
+
+	_, err = stmt.ExecContext(ctx, email, 2)
+	if err != nil {
+		var sqliteErr sqlite3.Error
+		if errors.As(err, &sqliteErr); sqliteErr.ExtendedCode == sqlite3.ErrConstraintUnique {
+			return fmt.Errorf("%s: %w", op, storage.ErrAdminExists)
+		}
+		return fmt.Errorf("%s: %w", op, err)
+	}
+
+	return nil
+}
+
+// DeleteModerator deletes moderator from admins db by email
+func (s *Storage) DeleteAdmin(ctx context.Context, email string) error {
+	const op = "storage.sqlite.DeleteAdmin"
+
+	stmt, err := s.db.Prepare("DELETE FROM admins WHERE email = ?")
+	if err != nil {
+		return fmt.Errorf("%s: %w", op, err)
+	}
+
+	_, err = stmt.ExecContext(ctx, email)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return fmt.Errorf("%s: %w", op, storage.ErrAdminNotFound)
+		}
+		return fmt.Errorf("%s: %w", op, err)
+	}
+
+	return nil
 }
