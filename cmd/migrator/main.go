@@ -49,7 +49,10 @@ func main() {
 		panic(err)
 	}
 
-	storage.SaveUser(context.Background(), "admin", passHash)
+	_, err = storage.SaveUser(context.Background(), "admin", passHash)
+	if err != nil {
+		panic(err)
+	}
 
 	fmt.Println("migrations applied successfully")
 }

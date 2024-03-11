@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"time"
 
 	"sso/internal/domain/models"
 	"sso/internal/storage"
@@ -32,12 +33,13 @@ func New(storagePath string) (*Storage, error) {
 func (s *Storage) SaveUser(ctx context.Context, email string, passHash []byte) (int64, error) {
 	const op = "storage.sqlite.SaveUser"
 
-	stmt, err := s.db.Prepare("INSERT INTO users(email, pass_hash) VALUES(?, ?)")
+	stmt, err := s.db.Prepare("INSERT INTO users(email, pass_hash, created_at, visited_at) VALUES(?, ?, ?, ?)")
 	if err != nil {
 		return 0, fmt.Errorf("%s: %w", op, err)
 	}
 
-	res, err := stmt.ExecContext(ctx, email, passHash)
+	currentTime := time.Now()
+	res, err := stmt.ExecContext(ctx, email, passHash, currentTime, currentTime)
 	if err != nil {
 		var sqliteErr sqlite3.Error
 		if errors.As(err, &sqliteErr) && sqliteErr.ExtendedCode == sqlite3.ErrConstraintUnique {
@@ -53,6 +55,22 @@ func (s *Storage) SaveUser(ctx context.Context, email string, passHash []byte) (
 	}
 
 	return id, nil
+}
+
+func (s *Storage) UpdateUserVisitTime(ctx context.Context, email string, visitTime time.Time) error {
+	const op = "storage.sqlite.UpdateUserVisitTime"
+
+	stmt, err := s.db.Prepare("UPDATE users SET visited_at = ? WHERE email = ?")
+	if err != nil {
+		return fmt.Errorf("%s: %w", op, err)
+	}
+
+	_, err = stmt.ExecContext(ctx, visitTime, email)
+	if err != nil {
+		return fmt.Errorf("%s: %w", op, err)
+	}
+
+	return nil
 }
 
 // User returns user model from db by email
@@ -101,11 +119,31 @@ func (s *Storage) Admin(ctx context.Context, email string) (models.Admin, error)
 	return admin, nil
 }
 
-// App returns app model from db by appID
-func (s *Storage) App(ctx context.Context, appID int) (models.App, error) {
-	const op = "storage.sqlite.App"
+func (s *Storage) SaveApp(ctx context.Context, name, apiKey string) error {
+	const op = "storage.sqlite.SaveApp"
 
-	stmt, err := s.db.Prepare("SELECT id, name, secret FROM apps WHERE id = ?")
+	stmt, err := s.db.Prepare("INSERT INTO apps(name, apiKey) VALUES(?, ?)")
+	if err != nil {
+		return fmt.Errorf("%s: %w", op, err)
+	}
+
+	_, err = stmt.ExecContext(ctx, name, apiKey)
+	if err != nil {
+		var sqliteErr sqlite3.Error
+		if errors.As(err, &sqliteErr) && sqliteErr.ExtendedCode == sqlite3.ErrConstraintUnique {
+			return fmt.Errorf("%s: %w", op, storage.ErrAppExists)
+		}
+		return fmt.Errorf("%s: %w", op, err)
+	}
+
+	return nil
+}
+
+// App returns app model from db by appID
+func (s *Storage) AppByID(ctx context.Context, appID int) (models.App, error) {
+	const op = "storage.sqlite.AppByID"
+
+	stmt, err := s.db.Prepare("SELECT id, name, apiKey FROM apps WHERE id = ?")
 	if err != nil {
 		return models.App{}, fmt.Errorf("%s: %w", op, err)
 	}
@@ -113,7 +151,30 @@ func (s *Storage) App(ctx context.Context, appID int) (models.App, error) {
 	row := stmt.QueryRowContext(ctx, appID)
 
 	var app models.App
-	err = row.Scan(&app.ID, &app.Name, &app.Secret)
+	err = row.Scan(&app.ID, &app.Name, &app.ApiKey)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return models.App{}, fmt.Errorf("%s: %w", op, storage.ErrAppNotFound)
+		}
+		return models.App{}, fmt.Errorf("%s: %w", op, err)
+	}
+
+	return app, nil
+}
+
+// App returns app model from db by apiKey
+func (s *Storage) AppByKey(ctx context.Context, apiKey string) (models.App, error) {
+	const op = "storage.sqlite.AppByKey"
+
+	stmt, err := s.db.Prepare("SELECT id, name, apiKey FROM apps WHERE apiKey = ?")
+	if err != nil {
+		return models.App{}, fmt.Errorf("%s: %w", op, err)
+	}
+
+	row := stmt.QueryRowContext(ctx, apiKey)
+
+	var app models.App
+	err = row.Scan(&app.ID, &app.Name, &app.ApiKey)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return models.App{}, fmt.Errorf("%s: %w", op, storage.ErrAppNotFound)

@@ -51,9 +51,9 @@ func (u *UserInfo) Admin(
 
 	admin, err := u.userProvider.Admin(ctx, email)
 	if err != nil {
-		if errors.Is(err, storage.ErrUserNotFound) {
-			log.Warn("user not found", sl.Err(err))
-			return models.Admin{}, fmt.Errorf("%s: %w", op, service.ErrUserNotFound)
+		if errors.Is(err, storage.ErrAdminNotFound) {
+			log.Warn("admin not found", sl.Err(err))
+			return models.Admin{}, fmt.Errorf("%s: %w", op, service.ErrAdminNotFound)
 		}
 
 		log.Error("failed to check if user is admin")

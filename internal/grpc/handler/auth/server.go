@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 
-	"sso/internal/grpc/interceptor/validation"
 	"sso/internal/service"
 
 	ssov1 "github.com/dedmouze/protos/gen/go/sso"
@@ -18,13 +17,16 @@ type Auth interface {
 		ctx context.Context,
 		email string,
 		password string,
-		appID int,
 	) (token string, err error)
 	RegisterNewUser(
 		ctx context.Context,
 		email string,
 		password string,
 	) (userID int64, err error)
+	RegisterNewApp(
+		ctx context.Context,
+		name string,
+	) (apiKey, userKey string, err error)
 }
 
 type serverAPI struct {
@@ -37,26 +39,17 @@ func Register(gRPC *grpc.Server, auth Auth) {
 }
 
 func (s *serverAPI) Login(ctx context.Context, req *ssov1.LoginRequest) (*ssov1.LoginResponse, error) {
-	if err := validation.ValidateRequest(ctx); err != nil {
-		return nil, err
-	}
-
-	token, err := s.auth.Login(ctx, req.GetEmail(), req.GetPassword(), int(req.GetAppId()))
+	token, err := s.auth.Login(ctx, req.GetEmail(), req.GetPassword())
 	if err != nil {
 		if errors.Is(err, service.ErrInvalidCredentials) || errors.Is(err, service.ErrAppNotFound) {
 			return nil, status.Error(codes.InvalidArgument, "invalid credentials")
 		}
 		return nil, status.Error(codes.Internal, "internal error")
 	}
-
 	return &ssov1.LoginResponse{Token: token}, nil
 }
 
 func (s *serverAPI) Register(ctx context.Context, req *ssov1.RegisterRequest) (*ssov1.RegisterResponse, error) {
-	if err := validation.ValidateRequest(ctx); err != nil {
-		return nil, err
-	}
-
 	userID, err := s.auth.RegisterNewUser(ctx, req.GetEmail(), req.GetPassword())
 	if err != nil {
 		if errors.Is(err, service.ErrUserExists) {
@@ -64,6 +57,16 @@ func (s *serverAPI) Register(ctx context.Context, req *ssov1.RegisterRequest) (*
 		}
 		return nil, status.Error(codes.Internal, "internal error")
 	}
-
 	return &ssov1.RegisterResponse{UserId: userID}, nil
+}
+
+func (s *serverAPI) RegisterApp(ctx context.Context, req *ssov1.RegisterAppRequest) (*ssov1.RegisterAppResponse, error) {
+	apiKey, userKey, err := s.auth.RegisterNewApp(ctx, req.GetName())
+	if err != nil {
+		if errors.Is(err, service.ErrAppAlreadyExists) {
+			return nil, status.Error(codes.AlreadyExists, "app already exists")
+		}
+		return nil, status.Error(codes.Internal, "internal error")
+	}
+	return &ssov1.RegisterAppResponse{ApiKey: apiKey, UserKey: userKey}, nil
 }

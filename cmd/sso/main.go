@@ -18,13 +18,13 @@ const (
 )
 
 func main() {
-	cfg := config.MustLoad()
+	cfg, scr := config.MustLoad()
 	log := setupLogger(cfg.Env)
 
 	log.Info("starting SSO", slog.String("env", cfg.Env), slog.String("version", "1"))
 	log.Debug("debug messages are enabled")
 
-	application := app.New(log, cfg.GRPC.Port, cfg.StoragePath, cfg.TokenTTL)
+	application := app.New(log, cfg.GRPC.Port, cfg.StoragePath, cfg.TokenTTL, scr.UserKey)
 	go func() {
 		application.GRPCServer.MustRun()
 	}()

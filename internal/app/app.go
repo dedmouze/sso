@@ -20,17 +20,18 @@ func New(
 	grpcPort int,
 	storagePath string,
 	tokenTTL time.Duration,
+	userKey string,
 ) *App {
 	storage, err := sqlite.New(storagePath)
 	if err != nil {
 		panic(err)
 	}
 
-	authService := auth.New(log, storage, storage, storage, tokenTTL)
+	authService := auth.New(log, storage, storage, storage, storage, storage, tokenTTL, userKey)
 	userInfoService := userInfo.New(log, storage)
 	permissionService := permission.New(log, storage, storage)
 
-	grpcApp := grpcapp.New(log, authService, userInfoService, permissionService, storage, grpcPort)
+	grpcApp := grpcapp.New(log, authService, userInfoService, permissionService, storage, grpcPort, userKey)
 	return &App{
 		GRPCServer: grpcApp,
 	}

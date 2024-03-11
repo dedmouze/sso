@@ -5,8 +5,6 @@ import (
 	"errors"
 
 	"sso/internal/domain/models"
-	"sso/internal/grpc/interceptor/auth"
-	"sso/internal/grpc/interceptor/validation"
 	"sso/internal/service"
 
 	ssov1 "github.com/dedmouze/protos/gen/go/sso"
@@ -30,14 +28,6 @@ func Register(gRPC *grpc.Server, userInfo UserInfo) {
 }
 
 func (s *serverAPI) User(ctx context.Context, req *ssov1.UserRequest) (*ssov1.UserResponse, error) {
-	if err := validation.ValidateRequest(ctx); err != nil {
-		return nil, err
-	}
-
-	if err := auth.CheckRequest(ctx); err != nil {
-		return nil, err
-	}
-
 	user, err := s.userInfo.User(ctx, req.GetEmail())
 	if err != nil {
 		if errors.Is(err, service.ErrUserNotFound) {
@@ -45,22 +35,13 @@ func (s *serverAPI) User(ctx context.Context, req *ssov1.UserRequest) (*ssov1.Us
 		}
 		return nil, status.Error(codes.Internal, "internal error")
 	}
-
 	return &ssov1.UserResponse{
-		UserID:   user.ID,
-		Email:    user.Email,
-		PassHash: user.PassHash}, nil
+		UserID: user.ID,
+		Email:  user.Email,
+	}, nil
 }
 
 func (s *serverAPI) Admin(ctx context.Context, req *ssov1.AdminRequest) (*ssov1.AdminResponse, error) {
-	if err := validation.ValidateRequest(ctx); err != nil {
-		return nil, err
-	}
-
-	if err := auth.CheckRequest(ctx); err != nil {
-		return nil, err
-	}
-
 	admin, err := s.userInfo.Admin(ctx, req.GetEmail())
 	if err != nil {
 		if errors.Is(err, service.ErrAdminNotFound) {

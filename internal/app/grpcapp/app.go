@@ -25,13 +25,14 @@ func New(
 	authService auth.Auth,
 	userInfoService userInfo.UserInfo,
 	permissionService permission.Permission,
-	appGetter authInterceptor.AppGetter,
+	appProvider authInterceptor.AppProvider,
 	port int,
+	userKey string,
 ) *App {
 	gRPCServer := grpc.NewServer(
 		grpc.ChainUnaryInterceptor(
 			validation.UnaryValidationInterceptor(log),
-			authInterceptor.UnaryAuthenticationInterceptor(log, appGetter),
+			authInterceptor.UnaryAuthenticationInterceptor(log, appProvider, userKey),
 		),
 	)
 

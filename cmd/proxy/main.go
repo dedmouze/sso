@@ -20,7 +20,7 @@ func run() error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	cfg := config.MustLoad()
+	cfg, _ := config.MustLoad()
 	grpcServerEndpoint := flag.String("grpc-server-endpoint", fmt.Sprintf("localhost:%v", cfg.GRPC.Port), "gRPC server endpoint")
 	flag.Parse()
 

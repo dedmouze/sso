@@ -1,5 +1,5 @@
-run:
-	go run .\cmd\sso\main.go --config=config/local.yaml
+run local:
+	go run .\cmd\sso\main.go --env=env/local.env
 proxy:
 	go run .\cmd\proxy\main.go --config=config/local.yaml
 migrate:

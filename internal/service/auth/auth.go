@@ -10,6 +10,7 @@ import (
 	"sso/internal/domain/models"
 	"sso/internal/lib/jwt"
 	"sso/internal/lib/logger/sl"
+	"sso/internal/lib/secret"
 	"sso/internal/service"
 	"sso/internal/service/userInfo"
 	"sso/internal/storage"
@@ -21,8 +22,11 @@ type Auth struct {
 	log          *slog.Logger
 	userSaver    UserSaver
 	userProvider userInfo.UserProvider
+	userChanger  UserChanger
 	appProvider  AppProvider
+	appSaver     AppSaver
 	tokenTTL     time.Duration
+	userKey      string
 }
 
 type UserSaver interface {
@@ -33,8 +37,25 @@ type UserSaver interface {
 	) (userID int64, err error)
 }
 
+type UserChanger interface {
+	UpdateUserVisitTime(
+		ctx context.Context,
+		email string,
+		visitTime time.Time,
+	) error
+}
+
+type AppSaver interface {
+	SaveApp(
+		ctx context.Context,
+		name string,
+		apiKey string,
+	) error
+}
+
 type AppProvider interface {
-	App(ctx context.Context, appID int) (models.App, error)
+	AppByID(ctx context.Context, appID int) (models.App, error)
+	AppByKey(ctx context.Context, apiKey string) (models.App, error)
 }
 
 // New returns a new instance of the Auth service
@@ -42,15 +63,21 @@ func New(
 	log *slog.Logger,
 	userSaver UserSaver,
 	userProvider userInfo.UserProvider,
+	userChanger UserChanger,
+	appSaver AppSaver,
 	appProvider AppProvider,
 	tokenTTL time.Duration,
+	userKey string,
 ) *Auth {
 	return &Auth{
 		log:          log,
 		userSaver:    userSaver,
 		userProvider: userProvider,
+		userChanger:  userChanger,
+		appSaver:     appSaver,
 		appProvider:  appProvider,
 		tokenTTL:     tokenTTL,
+		userKey:      userKey,
 	}
 }
 
@@ -62,7 +89,6 @@ func (a *Auth) Login(
 	ctx context.Context,
 	email string,
 	password string,
-	appID int,
 ) (string, error) {
 	const op = "services.auth.Login"
 
@@ -76,7 +102,7 @@ func (a *Auth) Login(
 	user, err := a.userProvider.User(ctx, email)
 	if err != nil {
 		if errors.Is(err, storage.ErrUserNotFound) {
-			log.Warn("user not found", sl.Err(err))
+			log.Info("user not found", sl.Err(err))
 			return "", fmt.Errorf("%s: %w", op, service.ErrInvalidCredentials)
 		}
 
@@ -89,32 +115,27 @@ func (a *Auth) Login(
 		return "", fmt.Errorf("%s: %w", op, service.ErrInvalidCredentials)
 	}
 
-	app, err := a.appProvider.App(ctx, appID)
-	if err != nil {
-		if errors.Is(err, storage.ErrAppNotFound) {
-			log.Warn("app not found", sl.Err(err))
-			return "", fmt.Errorf("%s: %w", op, service.ErrAppNotFound)
-		}
-		log.Info("failed to get app", sl.Err(err))
-		return "", fmt.Errorf("%s: %w", op, err)
-	}
-
 	admin, err := a.userProvider.Admin(ctx, email)
 	if err != nil {
 		if errors.Is(err, storage.ErrAdminNotFound) {
 			log.Info("user not admin")
 		} else {
-			log.Info("failed to get admin", sl.Err(err))
+			log.Error("failed to get admin", sl.Err(err))
 			return "", fmt.Errorf("%s: %w", op, err)
 		}
 	}
 
 	log.Info("user logged in successfully")
 
+	err = a.userChanger.UpdateUserVisitTime(ctx, email, time.Now())
+	if err != nil {
+		log.Warn("failed to update visit time")
+	}
+
 	if err != nil {
 		admin.Level = 1 // TODO: remove this brute force approach
 	}
-	token, err := jwt.NewToken(user, app, admin, a.tokenTTL)
+	token, err := jwt.NewToken(user, admin, a.tokenTTL, a.userKey)
 	if err != nil {
 		log.Error("failed to generate token", sl.Err(err))
 		return "", fmt.Errorf("%s: %w", op, err)
@@ -151,7 +172,7 @@ func (a *Auth) RegisterNewUser(
 	id, err := a.userSaver.SaveUser(ctx, email, passHash)
 	if err != nil {
 		if errors.Is(err, storage.ErrUserExists) {
-			log.Warn("user already exists", sl.Err(err))
+			log.Info("user already exists", sl.Err(err))
 			return 0, fmt.Errorf("%s: %w", op, service.ErrUserExists)
 		}
 
@@ -162,4 +183,50 @@ func (a *Auth) RegisterNewUser(
 	log.Info("user registered")
 
 	return id, nil
+}
+
+// RegisterNewApp registers new app in the system and returns apiKey
+//
+// If app with given name already exists, returns error
+func (a *Auth) RegisterNewApp(ctx context.Context, name string) (string, string, error) {
+	const op = "service.auth.RegisterNewApp"
+
+	log := a.log.With(
+		slog.String("op", op),
+		slog.String("app name", name),
+	)
+
+	log.Info("registering new app")
+
+	var apiKey string
+	var err error
+	for {
+		apiKey, err = secret.GenerateSecret()
+		if err != nil {
+			log.Error("failed to generate secret")
+			return "", "", fmt.Errorf("%s: %w", op, err)
+		}
+
+		_, err := a.appProvider.AppByKey(ctx, apiKey)
+		if err != nil {
+			if errors.Is(err, storage.ErrAppNotFound) {
+				break
+			}
+			log.Error("failed to get app by key", sl.Err(err))
+			return "", "", fmt.Errorf("%s: %w", op, err)
+		}
+	}
+
+	if err := a.appSaver.SaveApp(ctx, name, apiKey); err != nil {
+		if errors.Is(err, storage.ErrAppExists) {
+			log.Warn("app already exists")
+			return "", "", fmt.Errorf("%s: %w", op, service.ErrAppAlreadyExists)
+		}
+		log.Error("failed to save app", sl.Err(err))
+		return "", "", fmt.Errorf("%s: %w", op, err)
+	}
+
+	log.Info("app registered")
+
+	return apiKey, a.userKey, nil
 }
