@@ -11,6 +11,7 @@ ___
 │   ├───proxy
 │   └───sso
 ├───config
+├───env
 ├───internal
 │   ├───app
 │   │   └───grpcapp
@@ -27,11 +28,12 @@ ___
 │   │       └───validation
 │   ├───lib
 │   │   ├───jwt
-│   │   └───logger
-│   │       ├───handlers
-│   │       │   ├───slogdiscard
-│   │       │   └───slogpretty
-│   │       └───sl
+│   │   ├───logger
+│   │   │   ├───handlers
+│   │   │   │   ├───slogdiscard
+│   │   │   │   └───slogpretty
+│   │   │   └───sl
+│   │   └───secret
 │   ├───service
 │   │   ├───auth
 │   │   ├───permission
@@ -39,13 +41,10 @@ ___
 │   └───storage
 │       └───sqlite
 ├───migrations
-├───storage
-└───tests
-    ├───migrations
-    └───suite
+└───storage
 ```
 
-### Сервис предоставляет 6 эндпоитов
+### Сервис предоставляет 7 эндпоитов
 
 Можно делать как gRPC запросы (вызов метода), так и HTTP
 
