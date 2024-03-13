@@ -11,6 +11,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 type UserInfo interface {
@@ -36,8 +37,10 @@ func (s *serverAPI) User(ctx context.Context, req *ssov1.UserRequest) (*ssov1.Us
 		return nil, status.Error(codes.Internal, "internal error")
 	}
 	return &ssov1.UserResponse{
-		UserID: user.ID,
-		Email:  user.Email,
+		UserID:    user.ID,
+		Email:     user.Email,
+		CreatedAt: timestamppb.New(user.CreatedAt),
+		VisitedAt: timestamppb.New(user.VisitedAt),
 	}, nil
 }
 
